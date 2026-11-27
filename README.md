@@ -17,17 +17,30 @@
 - 우측 상단 **⚙ → 🔑 입장 코드 변경** 에서 바꿀 수 있습니다.
 - 한 번 입장한 기기는 `localStorage`에 세션 해시가 남아 다시 열 때 코드를 묻지 않습니다. **⚙ → 🔒 잠금** 으로 즉시 잠글 수 있습니다.
 
-## 실시간 DB 연결 (선택)
+## 실시간 DB 연결 (기본 DB 내장)
 
-연결하지 않아도 이 기기 안(`localStorage`)에서 모든 기능이 동작합니다.
-여러 기기·피클이 같은 내용을 보려면 무료 Firebase Realtime Database를 연결하세요.
+기본 DB 주소가 `app.js`의 `DEFAULT_DB_URL`에 들어 있습니다.
+
+```
+https://pickle-office-a97e9-default-rtdb.firebaseio.com
+```
+
+그래서 URL을 따로 넣지 않아도, 페이지를 열고 입장 코드를 넣으면 자동으로 이 DB에 붙어
+배지가 `● 실시간 연결`(초록)로 표시됩니다. 연결되지 않으면 이 기기 안(`localStorage`)에서
+모든 기능이 그대로 동작합니다.
+
+- **다른 DB로 바꾸기**: 우측 상단 배지 클릭 → `databaseURL` 수정 → **연결**
+- **이 기기만 로컬로 쓰기**: 배지 클릭 → **연결 해제** (그 기기에서는 다시 열어도 자동 연결하지 않음)
+- **다시 실시간으로**: 배지 클릭 → **연결** (입력란이 비어 있으면 기본 DB로 연결)
+
+새 Firebase 프로젝트를 직접 만들어 쓰려면:
 
 1. https://console.firebase.google.com → 프로젝트 만들기
 2. **Realtime Database** 만들기 → 위치 선택 → **테스트 모드**로 시작
 3. 데이터베이스 URL 복사 (`https://내프로젝트-default-rtdb.firebaseio.com` 형태)
-4. 페이지 우측 상단의 상태 배지(`● 로컬 모드 (DB 연결)`) 클릭 → URL 붙여넣고 **연결**
+4. 페이지 우측 상단의 상태 배지 클릭 → URL을 바꿔 넣고 **연결**
 
-연결되면 배지가 `● 실시간 연결`(초록)로 바뀌고, `on('value')` 구독으로 모든 기기가 즉시 동기화됩니다.
+연결되면 `on('value')` 구독으로 모든 기기가 즉시 동기화됩니다. 수정용으로 `assets` 쿼리(`?v=8`)를 올려 두었으니, 파일을 고칠 때마다 숫자를 하나씩 올리면 브라우저 캐시가 바로 갱신됩니다.
 
 - 데이터 경로: `office/members`, `office/tasks`, `office/notes`, `office/messages/{room}`, `office/presence`
 - 접속자 수(ON N명)는 presence 하트비트(25초)로 계산합니다.
