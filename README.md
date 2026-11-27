@@ -45,3 +45,18 @@
 ## 로컬에서 열기
 
 `index.html`을 브라우저로 열면 그대로 동작합니다. (폴더째 열거나 `python3 -m http.server` 사용)
+
+## 배포 (GitHub Pages)
+
+- 주소: <https://mimikk9119.github.io/pickle-office/>
+- 저장소: <https://github.com/mimikk9119/pickle-office>
+- Pages 게시 브랜치: **`gh-pages`** (루트) — 저장소를 처음 만들 때 `gh-pages` 브랜치로 자동 게시되었습니다. 앱 토큰에 Pages 관리 권한이 없어 `main`으로 바꾸지 못했습니다.
+- 수정 내용을 배포하려면 두 브랜치에 같이 올립니다.
+
+```bash
+git add -A && git commit -m "수정 내용"
+git push origin main && git push origin main:gh-pages
+```
+
+- `main` / 루트에서 바로 게시하고 싶으면 저장소 관리자가 Settings → Pages에서 Source를 `main` / `/`로 바꾸면 됩니다.
+- `styles.css`·`app.js`를 고칠 때는 `index.html`의 `?v=` 숫자를 올려 캐시된 옛 화면이 남지 않게 합니다.
