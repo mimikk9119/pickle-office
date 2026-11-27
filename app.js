@@ -1,6 +1,7 @@
 /* ============================================================
    경미님 비서실 · 합동 비서실 (정적 웹앱)
-   - 입장 코드: SHA-256 해시로만 비교 (평문 저장 없음)
+   - 입장 코드: 솔트를 붙인 SHA-256 해시로만 비교 (평문 저장 없음)
+   - 입장 코드에서 계산한 roomKey 아래(rooms/…/office)로만 DB를 읽고 씀
    - 실시간 DB: Firebase Realtime Database (databaseURL만 입력)
    - 미연결 시: localStorage 로컬 모드로 모든 기능 동작
    ============================================================ */
@@ -9,17 +10,21 @@
 
   /* ---------- 상수 ---------- */
   var K = {
-    cfg: 'pickleOffice.cfg.v1',
-    code: 'pickleOffice.codeHash.v1',
-    session: 'pickleOffice.session.v1',
-    data: 'pickleOffice.data.v1',
-    sender: 'pickleOffice.sender.v1',
-    room: 'pickleOffice.room.v1',
-    localOnly: 'pickleOffice.localOnly.v1'
+    cfg: 'pickleOffice.cfg.v2',
+    code: 'pickleOffice.codeHash.v2',
+    session: 'pickleOffice.session.v2',
+    data: 'pickleOffice.data.v2',
+    sender: 'pickleOffice.sender.v2',
+    room: 'pickleOffice.room.v2',
+    roomKey: 'pickleOffice.roomKey.v2',
+    localOnly: 'pickleOffice.localOnly.v2'
   };
 
-  // sha256("9119") — 초기 입장 코드의 해시 (평문은 코드에 넣지 않음)
-  var DEFAULT_CODE_HASH = 'bedc725da6f59c82f22ba662298fa0c8892a4dceb7d47d9d703af3253818129f';
+  // 입장 코드 검증·방 이름용 솔트 (평문 코드는 파일에 넣지 않음)
+  var CODE_SALT = 'pickle-verify-v2:';
+  var ROOM_SALT = 'pickle-room-v2:';
+  // sha256(CODE_SALT + 초기 입장 코드) — 초기 코드의 해시
+  var DEFAULT_CODE_HASH = '859977539f8c4aa84f538a230564776f744591b117ca93f57bdcd414759785c8';
 
   // 기본 실시간 DB — 따로 URL을 넣지 않아도 이 주소로 바로 연결됩니다.
   var DEFAULT_DB_URL = 'https://pickle-office-a97e9-default-rtdb.firebaseio.com';
@@ -149,6 +154,7 @@
     data: { members: {}, tasks: {}, notes: {}, messages: {} },
     presence: {},
     room: localStorage.getItem(K.room) || 'command',
+    roomKey: '',
     senderId: localStorage.getItem(K.sender) || 'kyoungmi',
     tab: 'meeting',
     listeners: [],
@@ -156,6 +162,7 @@
     editingNote: null,
     seeded: false,
     dbError: '',
+    connectPending: false,
     unloadBound: false
   };
   ROOMS.forEach(function (r) { S.data.messages[r.id] = {}; });
@@ -212,8 +219,9 @@
   }
 
   function put(path, val) {
-    if (S.mode === 'firebase' && S.db) {
-      S.db.ref('office/' + path).set(val).catch(function (e) { setDbState('저장 실패: ' + (e && e.message ? e.message : e), 'err'); });
+    var at = rp(path);
+    if (S.mode === 'firebase' && S.db && at) {
+      S.db.ref(at).set(val).catch(function (e) { setDbState('저장 실패: ' + (e && e.message ? e.message : e), 'err'); });
     } else {
       deepSet(S.data, path, val);
       saveLocal();
@@ -221,8 +229,9 @@
     }
   }
   function patch(path, val) {
-    if (S.mode === 'firebase' && S.db) {
-      S.db.ref('office/' + path).update(val).catch(function (e) { setDbState('저장 실패: ' + (e && e.message ? e.message : e), 'err'); });
+    var at = rp(path);
+    if (S.mode === 'firebase' && S.db && at) {
+      S.db.ref(at).update(val).catch(function (e) { setDbState('저장 실패: ' + (e && e.message ? e.message : e), 'err'); });
     } else {
       var cur = getPath(S.data, path) || {};
       var merged = {};
@@ -234,8 +243,9 @@
     }
   }
   function removePath(path) {
-    if (S.mode === 'firebase' && S.db) {
-      S.db.ref('office/' + path).remove();
+    var at = rp(path);
+    if (S.mode === 'firebase' && S.db && at) {
+      S.db.ref(at).remove();
     } else {
       deepSet(S.data, path, null);
       saveLocal();
@@ -244,6 +254,19 @@
   }
   function getPath(root, path) {
     return path.split('/').reduce(function (o, k) { return o == null ? undefined : o[k]; }, root);
+  }
+
+  /* ---------- 방 키 (입장 코드의 해시로 만든 DB 경로) ---------- */
+  function storedRoomKey() {
+    try { return localStorage.getItem(K.roomKey) || ''; } catch (e) { return ''; }
+  }
+  function roomKeyFor(code) {
+    return sha256(ROOM_SALT + code);
+  }
+  // rooms/{roomKey}/office/... — roomKey 없이는 DB 경로를 만들 수 없음
+  function rp(path) {
+    if (!S.roomKey) return null;
+    return 'rooms/' + S.roomKey + '/office/' + path;
   }
 
   /* ---------- Firebase ---------- */
@@ -257,7 +280,7 @@
     S.dbError = '';
 
     var hook = function (path, apply) {
-      var ref = db.ref('office/' + path);
+      var ref = db.ref(rp(path));
       var cb = function (snap) {
         try { apply(snap.val()); } catch (e) { console.warn(e); }
         render();
@@ -275,7 +298,7 @@
     hook('members', function (v) {
       var m = convMap(v);
       if (!Object.keys(m).length) {
-        if (!S.seeded) { S.seeded = true; db.ref('office/members').set(defaultMembers()); }
+        if (!S.seeded) { S.seeded = true; db.ref(rp('members')).set(defaultMembers()); }
         return;
       }
       S.data.members = m;
@@ -305,7 +328,7 @@
     S.listeners = [];
     if (S.presenceTimer) { clearInterval(S.presenceTimer); S.presenceTimer = null; }
     if (S.db) {
-      try { S.db.ref('office/presence/' + S.clientId).remove(); } catch (e) { }
+      try { S.db.ref(rp('presence/' + S.clientId)).remove(); } catch (e) { }
     }
     try {
       resetFirebaseApps();
@@ -325,7 +348,7 @@
     if (S.mode !== 'firebase' || !S.db) return;
     if (S.presenceTimer) { clearInterval(S.presenceTimer); S.presenceTimer = null; }
     var me = currentSender();
-    var ref = S.db.ref('office/presence/' + S.clientId);
+    var ref = S.db.ref(rp('presence/' + S.clientId));
     ref.set({ name: me ? me.name : '게스트', emoji: me ? me.emoji : '🙂', ts: Date.now() });
     try { ref.onDisconnect().remove(); } catch (e) { }
     S.presenceTimer = setInterval(function () {
@@ -364,6 +387,7 @@
     if (cfg.apiKey && String(cfg.apiKey).trim()) opts.apiKey = String(cfg.apiKey).trim();
 
     detachFirebase(true);
+    S.connectPending = true;
     resetFirebaseApps().then(function () {
       try {
         firebase.initializeApp(opts);
@@ -382,6 +406,7 @@
       var timer = setTimeout(function () {
         if (settled) return;
         settled = true;
+        S.connectPending = false;
         done(false, 'DB에 연결하지 못했습니다. databaseURL과 DB 규칙(읽기/쓰기 허용)을 확인해 주세요.');
       }, 12000);
 
@@ -389,12 +414,15 @@
         if (snap.val() === true && !settled) {
           settled = true;
           clearTimeout(timer);
+          S.connectPending = false;
           S.cfg = { databaseURL: url, apiKey: opts.apiKey || '' };
           try {
             localStorage.setItem(K.cfg, JSON.stringify(S.cfg));
             localStorage.removeItem(K.localOnly);   // 직접 연결하면 로컬 고정 해제
           } catch (e) { }
-          attachFirebase(db);
+          S.db = db;
+          // 입장 전(잠금 상태)에는 방 키가 없어 구독하지 않고, 입장할 때 붙입니다.
+          if (S.roomKey) attachFirebase(db);
           setBadge();
           render();
           done(true, '실시간 연결됨 · ' + url);
@@ -402,6 +430,7 @@
       }, function (err) {
         if (settled) return;
         settled = true;
+        S.connectPending = false;
         clearTimeout(timer);
         done(false, 'DB 연결 오류: ' + (err && err.message ? err.message : err));
       });
@@ -412,13 +441,43 @@
   function currentCodeHash() {
     try { return localStorage.getItem(K.code) || DEFAULT_CODE_HASH; } catch (e) { return DEFAULT_CODE_HASH; }
   }
+  // 입력한 평문 코드가 맞으면 그 코드를 돌려주고, 틀리면 null
+  // (이 기기에서 바꾼 코드가 있으면 그것으로만, 없으면 초기 코드로 검증)
+  async function verifyCode(v) {
+    var custom = null;
+    try { custom = localStorage.getItem(K.code); } catch (e) { custom = null; }
+    var t = String(v == null ? '' : v).trim();
+    if (!t) return null;
+    if (custom) {
+      if ((await sha256(t)) === custom) return t;
+      if ((await sha256(String(v))) === custom) return String(v);
+      return null;
+    }
+    if ((await sha256(CODE_SALT + t)) === DEFAULT_CODE_HASH) return t;
+    return null;
+  }
   function isUnlocked() {
-    try { return localStorage.getItem(K.session) === currentCodeHash(); } catch (e) { return false; }
+    try { return localStorage.getItem(K.session) === currentCodeHash() && !!S.roomKey; } catch (e) { return false; }
+  }
+
+  function reconnectSaved() {
+    var cfg = S.cfg;
+    if (!cfg) {
+      try { cfg = JSON.parse(localStorage.getItem(K.cfg) || 'null'); } catch (e) { cfg = null; }
+    }
+    if (cfg && cfg.databaseURL) {
+      S.cfg = cfg;
+      connectFirebase(cfg, function (ok, msg) { if (!ok) setDbState(msg, 'err'); });
+    }
   }
 
   function enterApp() {
     $('#lock').hidden = true;
     $('#app').hidden = false;
+    if (S.roomKey) {
+      if (S.db && !S.listeners.length) attachFirebase(S.db);
+      else if (!S.db && !S.connectPending) reconnectSaved();
+    }
     render();
     if (S.mode === 'firebase') startPresence();
     var box = $('#msgs');
@@ -426,7 +485,10 @@
   }
 
   function doLock() {
+    if (S.db) detachFirebase(true);   // 잠그면 실시간 구독도 끊어 둠
     try { localStorage.removeItem(K.session); } catch (e) { }
+    try { localStorage.removeItem(K.roomKey); } catch (e) { }
+    S.roomKey = '';
     closeMenu();
     $('#app').hidden = true;
     $('#lock').hidden = false;
@@ -440,10 +502,14 @@
     var msg = $('#lockMsg');
     var v = input.value;
     if (!v) { msg.textContent = '입장 코드를 입력해 주세요.'; return; }
-    var hash = await sha256(v.trim());
-    var hashRaw = await sha256(v);
-    if (hash === currentCodeHash() || hashRaw === currentCodeHash()) {
-      try { localStorage.setItem(K.session, currentCodeHash()); } catch (e) { }
+    var code = await verifyCode(v);
+    if (code !== null) {
+      var rk = await roomKeyFor(code);
+      try {
+        localStorage.setItem(K.session, currentCodeHash());
+        localStorage.setItem(K.roomKey, rk);
+      } catch (e) { }
+      S.roomKey = rk;
       msg.textContent = '';
       input.value = '';
       enterApp();
@@ -919,18 +985,18 @@
       setDbState('연결을 해제했습니다. 이 기기 로컬 모드로 동작합니다.', '');
     });
     $('#dbUpload').addEventListener('click', function () {
-      if (S.mode !== 'firebase' || !S.db) { setDbState('먼저 DB에 연결해 주세요.', 'err'); return; }
+      if (S.mode !== 'firebase' || !S.db || !S.roomKey) { setDbState('먼저 DB에 연결해 주세요.', 'err'); return; }
       if (!confirm('이 기기에 있는 내용을 실시간 DB로 올릴까요? (같은 id의 항목은 덮어씁니다)')) return;
       var db = S.db;
       var work = [];
       ['members', 'tasks', 'notes'].forEach(function (sec) {
         Object.keys(S.data[sec]).forEach(function (id) {
-          work.push(db.ref('office/' + sec + '/' + id).set(S.data[sec][id]));
+          work.push(db.ref(rp(sec + '/' + id)).set(S.data[sec][id]));
         });
       });
       ROOMS.forEach(function (r) {
         Object.keys(S.data.messages[r.id] || {}).forEach(function (id) {
-          work.push(db.ref('office/messages/' + r.id + '/' + id).set(S.data.messages[r.id][id]));
+          work.push(db.ref(rp('messages/' + r.id + '/' + id)).set(S.data.messages[r.id][id]));
         });
       });
       Promise.all(work).then(function () {
@@ -948,18 +1014,26 @@
     $('#codeSave').addEventListener('click', async function () {
       var st = $('#codeState');
       var oldV = $('#codeOld').value, n1 = $('#codeNew').value, n2 = $('#codeNew2').value;
-      if (await sha256(oldV.trim()) !== currentCodeHash() && await sha256(oldV) !== currentCodeHash()) {
+      if ((await verifyCode(oldV)) === null) {
         st.textContent = '현재 코드가 맞지 않습니다.'; st.className = 'db-state err'; return;
       }
       if (n1.trim().length < 2) { st.textContent = '새 코드는 2자 이상이어야 합니다.'; st.className = 'db-state err'; return; }
       if (n1 !== n2) { st.textContent = '새 코드 확인이 일치하지 않습니다.'; st.className = 'db-state err'; return; }
       var h = await sha256(n1.trim());
+      var rk = await roomKeyFor(n1.trim());
       try {
         localStorage.setItem(K.code, h);
         localStorage.setItem(K.session, h);
+        localStorage.setItem(K.roomKey, rk);
       } catch (e) { }
+      S.roomKey = rk;
       st.textContent = '입장 코드를 변경했습니다.'; st.className = 'db-state ok';
       $('#codeOld').value = ''; $('#codeNew').value = ''; $('#codeNew2').value = '';
+      // 새 코드의 방으로 다시 연결 (기존 코드의 방 데이터는 그 자리에 남습니다)
+      if (S.mode === 'firebase' || S.db) {
+        detachFirebase(true);
+        reconnectSaved();
+      }
     });
 
     $('#memSave').addEventListener('click', addMember);
@@ -1025,6 +1099,7 @@
 
   /* ---------- 시작 ---------- */
   function boot() {
+    S.roomKey = storedRoomKey();
     S.data = loadLocal();
     if (!Object.keys(S.data.members).length) {
       S.data.members = defaultMembers();
