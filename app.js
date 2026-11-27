@@ -14,11 +14,16 @@
     session: 'pickleOffice.session.v1',
     data: 'pickleOffice.data.v1',
     sender: 'pickleOffice.sender.v1',
-    room: 'pickleOffice.room.v1'
+    room: 'pickleOffice.room.v1',
+    localOnly: 'pickleOffice.localOnly.v1'
   };
 
   // sha256("9119") — 초기 입장 코드의 해시 (평문은 코드에 넣지 않음)
   var DEFAULT_CODE_HASH = 'bedc725da6f59c82f22ba662298fa0c8892a4dceb7d47d9d703af3253818129f';
+
+  // 기본 실시간 DB — 따로 URL을 넣지 않아도 이 주소로 바로 연결됩니다.
+  var DEFAULT_DB_URL = 'https://pickle-office-a97e9-default-rtdb.firebaseio.com';
+  var DEFAULT_DB_KEY = '';
 
   var ROOMS = [
     { id: 'grand', emoji: '🏛️', name: '대회의실' },
@@ -385,7 +390,10 @@
           settled = true;
           clearTimeout(timer);
           S.cfg = { databaseURL: url, apiKey: opts.apiKey || '' };
-          try { localStorage.setItem(K.cfg, JSON.stringify(S.cfg)); } catch (e) { }
+          try {
+            localStorage.setItem(K.cfg, JSON.stringify(S.cfg));
+            localStorage.removeItem(K.localOnly);   // 직접 연결하면 로컬 고정 해제
+          } catch (e) { }
           attachFirebase(db);
           setBadge();
           render();
@@ -893,7 +901,7 @@
     });
 
     $('#dbConnect').addEventListener('click', function () {
-      var cfg = { databaseURL: $('#dbUrl').value.trim(), apiKey: $('#dbKey').value.trim() };
+      var cfg = { databaseURL: $('#dbUrl').value.trim() || DEFAULT_DB_URL, apiKey: $('#dbKey').value.trim() };
       if (!cfg.databaseURL) { setDbState('databaseURL을 입력해 주세요.', 'err'); return; }
       setDbState('연결하는 중…', '');
       connectFirebase(cfg, function (ok, msg) {
@@ -904,7 +912,9 @@
       });
     });
     $('#dbDisconnect').addEventListener('click', function () {
-      try { localStorage.removeItem(K.cfg); } catch (e) { }
+      // 이 기기만 로컬 모드로 고정 — 다시 열어도 기본 DB로 자동 연결하지 않음
+      try { localStorage.removeItem(K.cfg); localStorage.setItem(K.localOnly, '1'); } catch (e) { }
+      S.cfg = null;
       detachFirebase(true);
       setDbState('연결을 해제했습니다. 이 기기 로컬 모드로 동작합니다.', '');
     });
@@ -972,8 +982,18 @@
     if (cfg) {
       $('#dbUrl').value = cfg.databaseURL || '';
       $('#dbKey').value = cfg.apiKey || '';
+    } else if (!$('#dbUrl').value) {
+      $('#dbUrl').value = DEFAULT_DB_URL;
     }
-    setDbState(S.mode === 'firebase' ? '현재 실시간 연결 중입니다.' : '현재 로컬 모드입니다. databaseURL을 넣으면 바로 실시간으로 바뀝니다.', S.mode === 'firebase' ? 'ok' : '');
+    if (S.mode === 'firebase') {
+      setDbState('현재 실시간 연결 중입니다.', 'ok');
+    } else {
+      var localOnly = false;
+      try { localOnly = localStorage.getItem(K.localOnly) === '1'; } catch (e) { }
+      setDbState(localOnly
+        ? '현재 이 기기만 로컬 모드입니다. 위 URL로 연결을 누르면 실시간으로 바뀝니다.'
+        : '현재 로컬 모드입니다. 비어 있으면 기본 DB(' + DEFAULT_DB_URL + ')로 연결합니다.', '');
+    }
     if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
   }
   function openCodeDialog() {
@@ -1015,13 +1035,23 @@
     bindEvents();
     setBadge();
 
+    // 설정이 없으면 기본 DB로 자동 연결 (로컬 고정한 기기는 제외)
     var cfg = null;
     try { cfg = JSON.parse(localStorage.getItem(K.cfg) || 'null'); } catch (e) { cfg = null; }
+    var localOnly = false;
+    try { localOnly = localStorage.getItem(K.localOnly) === '1'; } catch (e) { localOnly = false; }
+    if (!cfg || !cfg.databaseURL) {
+      cfg = localOnly ? null : { databaseURL: DEFAULT_DB_URL, apiKey: DEFAULT_DB_KEY };
+    }
     if (cfg && cfg.databaseURL) {
       S.cfg = cfg;
       connectFirebase(cfg, function (ok, msg) {
         if (!ok) setDbState(msg, 'err');
+        else setBadge();
       });
+    } else {
+      S.cfg = null;
+      setBadge();
     }
 
     if (isUnlocked()) enterApp();
