@@ -32,9 +32,9 @@
   function defaultMembers() {
     var t = Date.now();
     var list = [
-      { id: 'kyoungmi', name: 'kyoungmi', emoji: '👑', role: '대장님', owner: true, status: '대기중', task: '', lastActive: t },
-      { id: 'babutang', name: '바부탱', emoji: '🟦', role: '메인 비서', owner: false, status: '대기중', task: '', lastActive: t },
-      { id: 'mikukpon', name: '미국폰', emoji: '📱', role: '서브 비서', owner: false, status: '대기중', task: '', lastActive: t }
+      { id: 'kyoungmi', name: 'kyoungmi', emoji: '👑', role: '대장님', owner: true, order: 1, status: '대기중', task: '', lastActive: t },
+      { id: 'babutang', name: '바부탱', emoji: '🟦', role: '메인 비서', owner: false, order: 2, status: '대기중', task: '', lastActive: t },
+      { id: 'mikukpon', name: '미국폰', emoji: '📱', role: '서브 비서', owner: false, order: 3, status: '대기중', task: '', lastActive: t }
     ];
     var map = {};
     list.forEach(function (m) { map[m.id] = m; });
@@ -439,8 +439,27 @@
   }
 
   /* ---------- 렌더 ---------- */
+  function ensureOrder() {
+    var known = { kyoungmi: 1, babutang: 2, mikukpon: 3 };
+    var missing = [];
+    Object.keys(S.data.members || {}).forEach(function (id) {
+      var m = S.data.members[id];
+      if (!m) return;
+      if (typeof m.order === 'number') return;
+      if (known[id]) { m.order = known[id]; return; }
+      missing.push(m);
+    });
+    if (!missing.length) return;
+    missing.sort(function (a, b) { return String(a.name || '').localeCompare(String(b.name || ''), 'ko'); });
+    missing.forEach(function (m, i) { m.order = 10 + i; });
+  }
+
   function membersSorted() {
+    ensureOrder();
     return objValues(S.data.members).sort(function (a, b) {
+      var oa = typeof a.order === 'number' ? a.order : 999;
+      var ob = typeof b.order === 'number' ? b.order : 999;
+      if (oa !== ob) return oa - ob;
       if (!!a.owner !== !!b.owner) return a.owner ? -1 : 1;
       return String(a.name || '').localeCompare(String(b.name || ''), 'ko');
     });
@@ -693,8 +712,10 @@
     var dup = membersSorted().filter(function (m) { return m.name === name; })[0];
     if (dup) { st.textContent = '같은 이름의 멤버가 이미 있습니다.'; st.className = 'db-state err'; return; }
     var id = uid('mb-');
+    var maxOrder = 0;
+    membersSorted().forEach(function (m) { if (typeof m.order === 'number' && m.order > maxOrder) maxOrder = m.order; });
     put('members/' + id, {
-      id: id, name: name, emoji: emoji, role: role, owner: false,
+      id: id, name: name, emoji: emoji, role: role, owner: false, order: maxOrder + 1,
       status: '대기중', task: '', lastActive: Date.now()
     });
     st.textContent = '';
