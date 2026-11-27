@@ -277,10 +277,8 @@ main{flex:1;min-height:0;position:relative}
 .person .l1{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
 .person .l1 b{font-size:14.5px;color:#4A3018;letter-spacing:-.2px}
 .person .role{font-size:11px;color:#9B7B5A;background:#F8EEDC;border-radius:6px;padding:1px 6px}
-.person .l2{margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap}
-.person select{
-  font-size:12px;border:1px solid var(--line);border-radius:9px;background:#FFFCF4;padding:4px 7px;font-weight:700;
-}
+.person .l1 .stsel{margin-left:auto}
+select.stsel{font-size:11px;font-weight:800;border-radius:999px;padding:3px 7px;background:#FFFCF4;-webkit-appearance:none;appearance:none;text-align:center;cursor:pointer}
 .person .taskline{display:flex;gap:6px;align-items:center;margin-top:7px}
 .person .taskline input{
   flex:1;min-width:0;border:1px solid var(--line);background:#FFFDF7;border-radius:9px;padding:6px 9px;font-size:12.5px;

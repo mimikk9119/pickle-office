@@ -629,8 +629,7 @@
         '<div class="info">' +
         '<div class="l1"><b>' + esc(m.name) + '</b>' +
         (m.role ? '<span class="role">' + esc(m.role) + '</span>' : '') +
-        '<span class="st ' + cls + '">' + esc(st) + '</span></div>' +
-        '<div class="l2"><select data-status="' + esc(m.id) + '">' +
+        '<select class="st stsel ' + cls + '" data-status="' + esc(m.id) + '" aria-label="상태">' +
         MEMBER_STATUS.map(function (x) { return '<option value="' + x + '"' + (x === st ? ' selected' : '') + '>' + x + '</option>'; }).join('') +
         '</select></div>' +
         '<div class="taskline"><input type="text" maxlength="80" data-task="' + esc(m.id) + '" placeholder="현재 작업 없음" value="' + esc(m.task || '') + '"></div>' +
