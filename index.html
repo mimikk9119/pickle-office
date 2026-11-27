@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#FAF6EE">
+<title>경미님 비서실</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ================= 잠금 화면 ================= -->
+<div class="lock" id="lock">
+  <div class="lock-card">
+    <div class="lock-avatar">👑</div>
+    <h1>경미님 비서실</h1>
+    <p class="lock-sub">합동 비서실 · 입장 코드</p>
+    <form id="lockForm" autocomplete="off">
+      <input id="lockCode" type="password" inputmode="text" autocomplete="off"
+             placeholder="입장 코드" aria-label="입장 코드" maxlength="40">
+      <button type="submit">입장</button>
+    </form>
+    <p class="lock-msg" id="lockMsg" role="status"></p>
+    <p class="lock-foot">코드는 비서실 관리자에게 문의하세요.<br>한 번 입장하면 이 기기에서는 계속 열려 있습니다.</p>
+  </div>
+</div>
+
+<!-- ================= 앱 ================= -->
+<div class="app" id="app" hidden>
+
+  <header class="hdr">
+    <div class="hdr-left">
+      <div class="crown">👑</div>
+      <div class="hdr-txt">
+        <h1>경미님 비서실</h1>
+        <div class="hdr-sub"><span class="dot"></span>경미님 전용</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <button class="badge" id="statusBadge" type="button" title="실시간 DB 설정">● 로컬 모드 (DB 연결)</button>
+      <button class="icon-btn" id="menuBtn" type="button" aria-label="설정 메뉴">⚙</button>
+    </div>
+  </header>
+
+  <div class="menu" id="menu" hidden>
+    <button type="button" data-act="code">🔑 입장 코드 변경</button>
+    <button type="button" data-act="lock">🔒 잠금</button>
+    <button type="button" data-act="db">🛰️ 실시간 DB 설정</button>
+    <button type="button" data-act="export">⬇️ 데이터 내보내기</button>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button class="tab active" data-tab="meeting" role="tab">💬<span>회의실</span></button>
+    <button class="tab" data-tab="tasks" role="tab">📋<span>작업실</span></button>
+    <button class="tab" data-tab="status" role="tab">📊<span>비서현황</span></button>
+    <button class="tab" data-tab="notes" role="tab">📝<span>메모</span></button>
+  </nav>
+
+  <main>
+
+    <!-- ---------------- 회의실 ---------------- -->
+    <section class="panel panel-meeting active" id="panel-meeting">
+      <div class="roomchips" id="roomChips"></div>
+      <div class="roommeta" id="roomMeta">🎯 지휘실 · ON 1명</div>
+      <div class="msgs" id="msgs"></div>
+
+      <div class="composer">
+        <div class="compose-row">
+          <textarea id="msgInput" rows="1" enterkeyhint="send" placeholder="메시지를 입력하세요. 아래 @칩을 누르면 멘션이 들어갑니다."></textarea>
+          <button class="send" id="sendBtn" type="button">보내기</button>
+        </div>
+        <div class="chiprow">
+          <span class="chiplabel">발신</span>
+          <div class="chips" id="senderChips"></div>
+        </div>
+        <div class="chiprow">
+          <span class="chiplabel">멘션</span>
+          <div class="chips" id="mentionChips"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ---------------- 작업실 ---------------- -->
+    <section class="panel" id="panel-tasks" hidden>
+      <div class="panel-head">
+        <h2>📋 작업실</h2>
+        <p>할 일·지시 카드를 상태별로 관리합니다.</p>
+      </div>
+
+      <form class="card add-card" id="taskForm" autocomplete="off">
+        <input id="taskTitle" type="text" placeholder="새 작업 제목 (예: 11월 30일 등교 서류 확인)" maxlength="120">
+        <div class="add-row">
+          <select id="taskAssignee" aria-label="담당자"></select>
+          <select id="taskStatus" aria-label="상태">
+            <option value="대기">대기</option>
+            <option value="실행중">실행중</option>
+            <option value="완료">완료</option>
+          </select>
+          <button class="btn-brown" type="submit">+ 추가</button>
+        </div>
+      </form>
+
+      <div class="board" id="taskBoard"></div>
+    </section>
+
+    <!-- ---------------- 비서현황 ---------------- -->
+    <section class="panel" id="panel-status" hidden>
+      <div class="panel-head">
+        <h2>📊 비서현황</h2>
+        <p>등록된 멤버의 상태와 현재 작업을 공유합니다.</p>
+      </div>
+      <div class="status-list" id="statusList"></div>
+      <button class="btn-ghost wide" id="addMemberBtn2" type="button">+ 멤버 추가</button>
+    </section>
+
+    <!-- ---------------- 메모 ---------------- -->
+    <section class="panel" id="panel-notes" hidden>
+      <div class="panel-head">
+        <h2>📝 메모</h2>
+        <p>모두가 함께 보는 공동 메모입니다.</p>
+      </div>
+
+      <form class="card add-card" id="noteForm" autocomplete="off">
+        <input id="noteTitle" type="text" placeholder="제목 (선택)" maxlength="80">
+        <textarea id="noteBody" rows="3" placeholder="내용을 입력하세요."></textarea>
+        <div class="add-row">
+          <span class="grow"></span>
+          <button class="btn-brown" type="submit">+ 메모 추가</button>
+        </div>
+      </form>
+
+      <div class="note-list" id="noteList"></div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ================= 다이얼로그: DB 설정 ================= -->
+<dialog id="dbDialog" class="dlg">
+  <form method="dialog" class="dlg-head"><h3>🛰️ 실시간 DB 연결</h3><button class="x" aria-label="닫기">✕</button></form>
+  <div class="dlg-body">
+    <p class="hint">
+      Firebase Realtime Database를 연결하면 기기·피클 사이에 데이터가 실시간으로 동기화됩니다.
+      연결하지 않아도 이 기기 안에서 모든 기능이 그대로 동작합니다.
+    </p>
+    <ol class="steps">
+      <li>console.firebase.google.com → 프로젝트 만들기</li>
+      <li>Realtime Database 만들기 (위치 선택 후 <b>테스트 모드</b>)</li>
+      <li>데이터베이스 URL 복사 → 예: <code>https://내프로젝트-default-rtdb.firebaseio.com</code></li>
+      <li>아래에 붙여넣고 <b>연결</b>을 누르면 끝</li>
+    </ol>
+    <label class="field">
+      <span>databaseURL</span>
+      <input id="dbUrl" type="url" placeholder="https://xxxx-default-rtdb.firebaseio.com" spellcheck="false">
+    </label>
+    <label class="field">
+      <span>apiKey <em>(선택)</em></span>
+      <input id="dbKey" type="text" placeholder="AIza..." spellcheck="false">
+    </label>
+    <div class="add-row">
+      <button class="btn-brown" id="dbConnect" type="button">연결</button>
+      <button class="btn-ghost" id="dbDisconnect" type="button">연결 해제</button>
+    </div>
+    <button class="btn-ghost wide" id="dbUpload" type="button">⬆️ 이 기기 데이터를 DB로 올리기</button>
+    <p class="db-state" id="dbState" role="status"></p>
+  </div>
+</dialog>
+
+<!-- ================= 다이얼로그: 코드 변경 ================= -->
+<dialog id="codeDialog" class="dlg">
+  <form method="dialog" class="dlg-head"><h3>🔑 입장 코드 변경</h3><button class="x" aria-label="닫기">✕</button></form>
+  <div class="dlg-body">
+    <label class="field"><span>현재 코드</span><input id="codeOld" type="password" autocomplete="off"></label>
+    <label class="field"><span>새 코드 (2자 이상)</span><input id="codeNew" type="password" autocomplete="off"></label>
+    <label class="field"><span>새 코드 확인</span><input id="codeNew2" type="password" autocomplete="off"></label>
+    <div class="add-row">
+      <span class="grow"></span>
+      <button class="btn-brown" id="codeSave" type="button">변경</button>
+    </div>
+    <p class="db-state" id="codeState" role="status"></p>
+  </div>
+</dialog>
+
+<!-- ================= 다이얼로그: 멤버 추가 ================= -->
+<dialog id="memberDialog" class="dlg">
+  <form method="dialog" class="dlg-head"><h3>👥 멤버 추가</h3><button class="x" aria-label="닫기">✕</button></form>
+  <div class="dlg-body">
+    <label class="field"><span>이름</span><input id="memName" type="text" placeholder="예: 하선" maxlength="20"></label>
+    <label class="field"><span>이모지</span><input id="memEmoji" type="text" placeholder="🌸" maxlength="4"></label>
+    <label class="field"><span>역할</span><input id="memRole" type="text" placeholder="예: 서브 비서" maxlength="20"></label>
+    <div class="add-row">
+      <span class="grow"></span>
+      <button class="btn-brown" id="memSave" type="button">추가</button>
+    </div>
+    <p class="db-state" id="memState" role="status"></p>
+  </div>
+</dialog>
+
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
