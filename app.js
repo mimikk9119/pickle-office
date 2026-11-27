@@ -286,6 +286,15 @@
     startPresence();
   }
 
+  function resetFirebaseApps() {
+    try {
+      if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return Promise.resolve();
+      return Promise.all(firebase.apps.slice().map(function (a) {
+        return a.delete().catch(function () { });
+      }));
+    } catch (e) { return Promise.resolve(); }
+  }
+
   function detachFirebase(silent) {
     S.listeners.forEach(function (l) { try { l.ref.off('value', l.cb); } catch (e) { } });
     S.listeners = [];
@@ -294,9 +303,7 @@
       try { S.db.ref('office/presence/' + S.clientId).remove(); } catch (e) { }
     }
     try {
-      if (typeof firebase !== 'undefined' && firebase.apps && firebase.apps.length) {
-        firebase.apps.slice().forEach(function (a) { try { a.delete(); } catch (e) { } });
-      }
+      resetFirebaseApps();
     } catch (e) { }
     S.db = null;
     S.mode = 'local';
@@ -348,48 +355,48 @@
     if (!url) { done(false, 'databaseURL을 입력해 주세요.'); return; }
     if (!/^https:\/\/[^\s]+$/.test(url)) { done(false, 'databaseURL은 https:// 로 시작해야 합니다.'); return; }
 
+    var opts = { databaseURL: url };
+    if (cfg.apiKey && String(cfg.apiKey).trim()) opts.apiKey = String(cfg.apiKey).trim();
+
     detachFirebase(true);
-    try {
-      if (firebase.apps && firebase.apps.length) {
-        firebase.apps.slice().forEach(function (a) { try { a.delete(); } catch (e) { } });
+    resetFirebaseApps().then(function () {
+      try {
+        firebase.initializeApp(opts);
+      } catch (e) {
+        done(false, '초기화 실패: ' + (e && e.message ? e.message : e));
+        return;
       }
-      var opts = { databaseURL: url };
-      if (cfg.apiKey && String(cfg.apiKey).trim()) opts.apiKey = String(cfg.apiKey).trim();
-      firebase.initializeApp(opts);
-    } catch (e) {
-      done(false, '초기화 실패: ' + (e && e.message ? e.message : e));
-      return;
-    }
 
-    var db;
-    try { db = firebase.database(); } catch (e) {
-      done(false, 'DB 초기화 실패: ' + (e && e.message ? e.message : e));
-      return;
-    }
+      var db;
+      try { db = firebase.database(); } catch (e) {
+        done(false, 'DB 초기화 실패: ' + (e && e.message ? e.message : e));
+        return;
+      }
 
-    var settled = false;
-    var timer = setTimeout(function () {
-      if (settled) return;
-      settled = true;
-      done(false, 'DB에 연결하지 못했습니다. databaseURL과 DB 규칙(읽기/쓰기 허용)을 확인해 주세요.');
-    }, 12000);
+      var settled = false;
+      var timer = setTimeout(function () {
+        if (settled) return;
+        settled = true;
+        done(false, 'DB에 연결하지 못했습니다. databaseURL과 DB 규칙(읽기/쓰기 허용)을 확인해 주세요.');
+      }, 12000);
 
-    db.ref('.info/connected').on('value', function (snap) {
-      if (snap.val() === true && !settled) {
+      db.ref('.info/connected').on('value', function (snap) {
+        if (snap.val() === true && !settled) {
+          settled = true;
+          clearTimeout(timer);
+          S.cfg = { databaseURL: url, apiKey: opts.apiKey || '' };
+          try { localStorage.setItem(K.cfg, JSON.stringify(S.cfg)); } catch (e) { }
+          attachFirebase(db);
+          setBadge();
+          render();
+          done(true, '실시간 연결됨 · ' + url);
+        }
+      }, function (err) {
+        if (settled) return;
         settled = true;
         clearTimeout(timer);
-        S.cfg = { databaseURL: url, apiKey: opts.apiKey || '' };
-        try { localStorage.setItem(K.cfg, JSON.stringify(S.cfg)); } catch (e) { }
-        attachFirebase(db);
-        setBadge();
-        render();
-        done(true, '실시간 연결됨 · ' + url);
-      }
-    }, function (err) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timer);
-      done(false, 'DB 연결 오류: ' + (err && err.message ? err.message : err));
+        done(false, 'DB 연결 오류: ' + (err && err.message ? err.message : err));
+      });
     });
   }
 
