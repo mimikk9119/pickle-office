@@ -150,6 +150,7 @@
     presenceTimer: null,
     editingNote: null,
     seeded: false,
+    dbError: '',
     unloadBound: false
   };
   ROOMS.forEach(function (r) { S.data.messages[r.id] = {}; });
@@ -248,6 +249,7 @@
   function attachFirebase(db) {
     S.db = db;
     S.mode = 'firebase';
+    S.dbError = '';
 
     var hook = function (path, apply) {
       var ref = db.ref('office/' + path);
@@ -256,7 +258,9 @@
         render();
       };
       var eb = function (err) {
-        setDbState('DB 읽기 오류: ' + (err && err.message ? err.message : err) + ' — DB 규칙에서 읽기/쓰기를 허용해 주세요.', 'err');
+        var msg = (err && err.message ? err.message : String(err));
+        setDbState('DB 읽기 오류: ' + msg + ' — Firebase 규칙에서 읽기/쓰기를 허용해 주세요.', 'err');
+        S.dbError = msg;
         setBadge();
       };
       ref.on('value', cb, eb);
@@ -298,6 +302,7 @@
     S.mode = 'local';
     S.presence = {};
     S.seeded = false;
+    S.dbError = '';
     saveLocal();
     if (!silent) { setDbState('연결을 해제했습니다. 이 기기 로컬 모드로 동작합니다.', ''); }
     setBadge();
@@ -451,6 +456,12 @@
   function setBadge() {
     var b = $('#statusBadge');
     if (!b) return;
+    if (S.mode === 'firebase' && S.dbError) {
+      b.textContent = '● 연결 오류 (DB 확인)';
+      b.classList.add('local');
+      b.title = 'DB 오류: ' + S.dbError;
+      return;
+    }
     if (S.mode === 'firebase') {
       b.textContent = '● 실시간 연결';
       b.classList.remove('local');

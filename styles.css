@@ -68,7 +68,7 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:var(--text)}
 .lock-foot{margin:14px 0 0;font-size:11.5px;color:#A7967E;line-height:1.6}
 
 /* ---------- 앱 뼈대 ---------- */
-.app{display:flex;flex-direction:column;height:100dvh;max-width:900px;margin:0 auto;background:var(--cream)}
+.app{display:flex;flex-direction:column;height:100dvh;max-width:900px;margin:0 auto;background:var(--cream);position:relative}
 
 .hdr{
   display:flex;align-items:center;justify-content:space-between;gap:10px;
