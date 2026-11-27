@@ -59,6 +59,7 @@ input,textarea,select{font-family:inherit;font-size:inherit;color:var(--text)}
   background:#FFFCF5;text-align:center;letter-spacing:.28em;font-size:17px;
 }
 #lockCode:focus{outline:none;border-color:var(--brown3);box-shadow:0 0 0 3px rgba(201,138,86,.16)}
+#lockCode::placeholder{letter-spacing:0;font-size:14px}
 #lockForm button{
   padding:13px;border:none;border-radius:13px;color:#FFF8EC;font-weight:700;font-size:16px;
   background:linear-gradient(180deg,var(--brown2),var(--brown));box-shadow:0 4px 12px rgba(139,69,19,.22);
